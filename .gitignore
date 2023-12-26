@@ -1,0 +1,11 @@
+.env
+
+node_modules
+/node_modules
+node_modules/
+
+public
+/public
+
+useless.js
+/useless.js

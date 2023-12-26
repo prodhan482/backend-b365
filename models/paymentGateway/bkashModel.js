@@ -1,18 +1,16 @@
 import mongoose from 'mongoose';
+
 const { Schema, model } = mongoose;
 
-const bkashTransactionSchema = new mongoose.Schema({
-    // orderId: {
-    //     type: String,
-    //     required: true,
-    //     unique: true,
-    // },
+const bkashTransactionSchema = new Schema({
     amount: {
         type: Number,
         required: true,
     },
     paymentID: {
         type: String,
+        required: true,
+        unique: true,
     },
     bkashURL: {
         type: String,
@@ -35,7 +33,7 @@ const bkashTransactionSchema = new mongoose.Schema({
     },
     intent: {
         type: String,
-        default: 'authorization',
+        default: 'sale',
     },
     paymentCreateTime: {
         type: String,
@@ -60,4 +58,4 @@ const bkashTransactionSchema = new mongoose.Schema({
     },
 }, { timestamps: true });
 
-export default model('bkashTransactionDetails', bkashTransactionSchema);
+export default model('BkashTransactionDetails', bkashTransactionSchema);

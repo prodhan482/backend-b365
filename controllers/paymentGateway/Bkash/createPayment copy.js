@@ -4,7 +4,10 @@ import BkashTransaction from "../../../models/paymentGateway/bkashModel.js";
 
 const createPayment = asyncHandler(async (req, res) => {
   const { orderID, orderAmount, mobile } = req.body;
-  try {
+  
+
+
+  // try {
     const grantTokenResponse = await axios.post(
       process.env.BKASH_GRANT_TOKEN_URL,
       {
@@ -13,30 +16,52 @@ const createPayment = asyncHandler(async (req, res) => {
       },
       {
         headers: {
-          username: process.env.BKASH_USERNAME,
-          password: process.env.BKASH_PASSWORD,
+          'username': process.env.BKASH_USERNAME,
+          'password': process.env.BKASH_PASSWORD,
           "Content-Type": "application/json",
         },
       }
-    );
+      );
+
+    //   const formattedResponse = {
+    //     statusCode: "0000",
+    //     statusMessage: "Successful",
+    //     id_token: response.data.id_token,
+    //     token_type: response.data.token_type,
+    //     expires_in: response.data.expires_in,
+    //     refresh_token: response.data.refresh_token
+    // };
 
     const grantToken = grantTokenResponse.data.id_token;
+    console.log("🚀 ~ file: createPayment.js:36 ~ createPayment ~ grantToken:", grantToken)
+
+    // bkashHeaders = asyncHandler(async () => {
+    //   const headers = {
+    //     "Content-Type": "application/json",
+    //     Accept: "application/json",
+    //     Authorization: `Bearer ${grantToken}`,
+    //     "X-APP-KEY": process.env.BKASH_API_KEY,
+    //   };
+    // });
 
     const generateMerchantInvoiceNumber = () => {
       const randomDigits = Math.floor(1000 + Math.random() * 9000);
-      return `B365${randomDigits}` + "-" + `${orderID}`;
+      // const orderId = globals.get("orderId");
+      //   const lastFourDigits = orderId.slice(-4); // Last 4 digits of orderId
+      return `B365${randomDigits}${orderID}`;
     };
 
+
     const paymentResponse = await axios.post(
-      process.env.BKASH_CREATE_PAYMENT_URL,
+      process.env.BKASH_GRANT_TOKEN_URL,
       {
         mode: "0011",
         payerReference: `${orderID}` + "-" + `${mobile}`,
-        callbackURL: process.env.BASE_URL + "api/bkash/payment/callback",
+        callbackURL: process.env.BASE_URL + "bkash/payment/callback",
         merchantAssociationInfo: "MI05MID54RF09123456One",
         amount: orderAmount,
         currency: "BDT",
-        intent: "sale",
+        intent: "authorization",
         merchantInvoiceNumber: generateMerchantInvoiceNumber(),
       },
       {
@@ -46,6 +71,7 @@ const createPayment = asyncHandler(async (req, res) => {
         },
       }
     );
+    console.log("🚀 ~ file: createPayment.js:66 ~ createPayment ~ paymentResponse:", paymentResponse)
 
     const bkashTransaction = await BkashTransaction.create({
       statusCode: paymentResponse.data.statusCode,
@@ -69,120 +95,31 @@ const createPayment = asyncHandler(async (req, res) => {
       message: "Bkash payment created successfully",
       transaction: bkashTransaction,
     });
-  } catch (error) {
-    res
-      .status(500)
-      .json({ error: "Payment creation failed. Please try again." });
-  }
+    console.log(
+      "🚀 ~ file: createPayment.js:84 ~ createPayment ~ bkashURL: bkashTransaction.bkashURL:",
+      { bkashURL: bkashTransaction.bkashURL }
+    );
+    return res.status(200).json({ bkashURL: bkashTransaction.bkashURL });
+  // } catch (error) {
+  //   res
+  //     .status(500)
+  //     .json({ error: "Payment creation failed. Please try again." });
+  // }
 });
 
 const executePayment = asyncHandler(async (req, res) => {
-  const { status } = req.query;
-  const { paymentID } = req.params;
-
+  const { paymentID, status } = req.params;
+  console.log(
+    "🚀 ~ file: createPayment.js:71 ~ executePayment ~ paymentId:",
+    req.params
+  );
   try {
-    const grantTokenResponse = await axios.post(
-      process.env.BKASH_GRANT_TOKEN_URL,
-      {
-        app_key: process.env.BKASH_API_KEY,
-        app_secret: process.env.BKASH_SECRET_KEY,
-      },
-      {
-        headers: {
-          username: process.env.BKASH_USERNAME,
-          password: process.env.BKASH_PASSWORD,
-          "Content-Type": "application/json",
-        },
-      }
-    );
+    // const { paymentId } = req.params;
+    // const { status } = req.params;
 
-    const grantToken = grantTokenResponse.data.id_token;
-
-    if (status === "cancel" || status === "failure") {
-      return res.redirect(process.env.BASE_URL + `error?message=${status}`);
-    }
-    if (status === "success") {
-      const executeResponse = await axios.post(
-        process.env.BKASH_EXECUTE_PAYMENT_URL,
-        {
-          paymentID,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${grantToken}`,
-            "X-APP-KEY": process.env.BKASH_API_KEY,
-          },
-        }
-      );
-      if (executeResponse && executeResponse.statusCode === "0000") {
-        //const userId = globals.get('userId')
-        // await paymentModel.create({
-        //   userId: Math.random() * 10 + 1,
-        //   paymentID,
-        //   trxID: data.trxID,
-        //   date: data.paymentExecuteTime,
-        //   amount: parseInt(data.amount),
-        // });
-
-        return res.redirect(process.env.BASE_URL + `success`);
-      } else {
-        return res.redirect(
-          process.env.BASE_URL + `error?message=${executeResponse.statusMessage}`
-        );
-      }
-    }
-    // if (paymentId == BkashTransaction.paymentID) {
-    //   console.log(
-    //     "🚀 ~ file: createPayment.js:96 ~ executePayment ~ paymentId:",
-    //     paymentId
-    //   );
-
-    //   // Step 3: Update the database
-    //   const executionTransaction = await BkashTransaction.findOneAndUpdate(
-    //     { paymentID: executeResponse.data.paymentID },
-    //     {
-    //       $set: {
-    //         statusCode: executeResponse.data.statusCode,
-    //         statusMessage: executeResponse.data.statusMessage,
-    //         payerReference: executeResponse.data.payerReference,
-    //         customerMsisdn: executeResponse.data.customerMsisdn,
-    //         trxID: executeResponse.data.trxID,
-    //         amount: executeResponse.data.amount,
-    //         transactionStatus: executeResponse.data.transactionStatus,
-    //         paymentExecuteTime: executeResponse.data.paymentExecuteTime,
-    //         currency: executeResponse.data.currency,
-    //         intent: executeResponse.data.intent,
-    //         merchantInvoiceNumber: executeResponse.data.merchantInvoiceNumber,
-    //       },
-    //     },
-    //     { new: true, upsert: true }
-    //   );
-
-      // console.log("🚀 ~ file: createPayment.js:116 ~ executePayment ~ executionTransaction:", executionTransaction)
-
-      res.status(200).json({
-        success: true,
-        message: "Bkash payment executed successfully",
-        transaction: executionTransaction,
-      });
-    
-  } catch (error) {
-    console.error(error);
-    res
-      .status(500)
-      .json({ error: "Payment execution failed. Please try again." });
-  }
-});
-
-
-
-
-
-const createPayment2 = asyncHandler(async (req, res) => {
-  try {
     // Step 1: Create Grant Token for execution
     const grantTokenResponse = await axios.post(
-      "https://tokenized.sandbox.bka.sh/v1.2.0-beta/tokenized/checkout/token/grant",
+      process.env.BKASH_GRANT_TOKEN_URL,
       {
         app_key: "4f6o0cjiki2rfm34kfdadl1eqq",
         app_secret: "2is7hdktrekvrbljjh44ll3d9l1dtjo4pasmjvs5vl5qr3fug4b",
@@ -198,7 +135,72 @@ const createPayment2 = asyncHandler(async (req, res) => {
 
     const grantToken = grantTokenResponse.data.id_token;
 
-    // Step 2: Create Payment
+    const executeResponse = await axios.post(
+      "https://tokenized.sandbox.bka.sh/v1.2.0-beta/tokenized/checkout/execute",
+      {
+        paymentID,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${grantToken}`,
+          "X-APP-KEY": "4f6o0cjiki2rfm34kfdadl1eqq",
+        },
+      }
+    );
+
+    const executionTransaction = await BkashTransaction.findOneAndUpdate(
+      { paymentID: executeResponse.data.paymentID },
+      { status: executeResponse.data.status },
+      {
+        $set: {
+          statusCode: executeResponse.data.statusCode,
+          statusMessage: executeResponse.data.statusMessage,
+          payerReference: executeResponse.data.payerReference,
+          customerMsisdn: executeResponse.data.customerMsisdn,
+          trxID: executeResponse.data.trxID,
+          amount: executeResponse.data.amount,
+          transactionStatus: executeResponse.data.transactionStatus,
+          paymentExecuteTime: executeResponse.data.paymentExecuteTime,
+          currency: executeResponse.data.currency,
+          intent: executeResponse.data.intent,
+          merchantInvoiceNumber: executeResponse.data.merchantInvoiceNumber,
+        },
+      },
+      { new: true, upsert: true }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Bkash payment executed successfully",
+      transaction: executionTransaction,
+    });
+  } catch (error) {
+    console.error(error);
+    res
+      .status(500)
+      .json({ error: "Payment execution failed. Please try again." });
+  }
+});
+
+const createPayment2 = asyncHandler(async (req, res) => {
+  try {
+    const grantTokenResponse = await axios.post(
+      process.env.BKASH_GRANT_TOKEN_URL,
+      {
+        app_key: "4f6o0cjiki2rfm34kfdadl1eqq",
+        app_secret: "2is7hdktrekvrbljjh44ll3d9l1dtjo4pasmjvs5vl5qr3fug4b",
+      },
+      {
+        headers: {
+          username: "sandboxTokenizedUser02",
+          password: "sandboxTokenizedUser02@12345",
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    const grantToken = grantTokenResponse.data.id_token;
+
     const paymentResponse = await axios.post(
       "https://tokenized.sandbox.bka.sh/v1.2.0-beta/tokenized/checkout/create",
       {
@@ -206,10 +208,10 @@ const createPayment2 = asyncHandler(async (req, res) => {
         payerReference: "01723888888",
         callbackURL: "https://bazar365.com/execute-payment",
         merchantAssociationInfo: "MI05MID54RF09123456One",
-        amount: 500, // Use the order amount from req.body
+        amount: 500,
         currency: "BDT",
         intent: "authorization",
-        merchantInvoiceNumber: "INV2023", // Use the order ID from req.body
+        merchantInvoiceNumber: "INV2023",
       },
       {
         headers: {
@@ -238,7 +240,6 @@ const createPayment2 = asyncHandler(async (req, res) => {
 
     const paymentID = paymentResponse.data.paymentID;
 
-    // Step 3: Execute Payment
     const executeResponse = await axios.post(
       "https://tokenized.sandbox.bka.sh/v1.2.0-beta/tokenized/checkout/execute",
       {
@@ -252,7 +253,6 @@ const createPayment2 = asyncHandler(async (req, res) => {
       }
     );
 
-    // Step 4: Update the database
     let status = "IncompletePayment";
 
     if (executeResponse.data.statusCode === "0000") {
@@ -295,3 +295,15 @@ const createPayment2 = asyncHandler(async (req, res) => {
 });
 
 export { createPayment, executePayment, createPayment2 };
+
+// import asyncHandler from "express-async-handler";
+// import axios from "axios";
+// import BkashTransaction from "../../../models/paymentGateway/bkashModel.js";
+
+// const createPayment = asyncHandler(async (req, res) => {
+
+// });
+
+//     export {
+//     createPayment,
+// };

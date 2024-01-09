@@ -4,7 +4,8 @@ import { createPayment, executePayment, createPayment2 } from '../../controllers
 const paymentGateways = Router();
 
 paymentGateways.route('/paymentCreate').post(createPayment)
-paymentGateways.route('/executePayment/:paymentID/:status').post(executePayment)
+// paymentGateways.route('/executePayment/:paymentID').post(executePayment)
+paymentGateways.route('/executePayment/:paymentID').post(executePayment);
 paymentGateways.route('/createPayment2').post(createPayment2)
 
 export default paymentGateways

@@ -15,18 +15,18 @@ const bkashTransactionSchema = new Schema({
     bkashURL: {
         type: String,
     },
-    callbackURL: {
-        type: String,
-    },
-    successCallbackURL: {
-        type: String,
-    },
-    failureCallbackURL: {
-        type: String,
-    },
-    cancelledCallbackURL: {
-        type: String,
-    },
+    // callbackURL: {
+    //     type: String,
+    // },
+    // successCallbackURL: {
+    //     type: String,
+    // },
+    // failureCallbackURL: {
+    //     type: String,
+    // },
+    // cancelledCallbackURL: {
+    //     type: String,
+    // },
     currency: {
         type: String,
         default: 'BDT',

@@ -1,4 +1,5 @@
 import jwt from "jsonwebtoken";
+import { createHash, createHmac  } from "crypto";
 import bcrypt from "bcryptjs";
 import asyncHandler from "express-async-handler";
 
@@ -156,39 +157,99 @@ const verifyCustomer = asyncHandler(async (req, res) => {
   }
 });
 
-// Login Customer
+// // Login Customer
+// const loginCustomer = asyncHandler(async (req, res) => {
+//   const { email, mobile, password } = req.body;
+
+//   // Check for customer email
+//   const customer = await Customer.findOne({
+//     $or: [{ email: email }, { mobile: mobile }],
+//   });
+
+//   if (!customer) {
+//     res.status(400);
+//     throw new Error("No customer found with this email");
+//   }
+
+//   // Check if password matches
+
+//   if (customer && (await compare(password, customer.password))) {
+//     res.status(200).json({
+//       _id: customer.id,
+//       name: customer.name,
+//       email: customer.email,
+//       mobile: customer.mobile,
+//       isVerified: customer.isVerified,
+//       image: customer.image,
+//       gender: customer.gender,
+//       token: generateToken(customer._id),
+//     });
+//   } else {
+//     res.status(400);
+//     throw new Error("Invalid Credentials");
+//   }
+
+// });
+
+
+const magentoCryptKey = '80d0d996d894794fbd7d6ee932aad45b';
+
+function magentoHashPassword(password) {
+  // Assuming Magento uses SHA-256 with the key as a salt
+  const hash = createHmac('sha256', magentoCryptKey).update(password).digest('hex');
+  return hash;
+}
+
 const loginCustomer = asyncHandler(async (req, res) => {
-  const { email, mobile, password } = req.body;
+  try {
+    const { email, mobile, password } = req.body;
+    console.log("Request Body:", req.body);
 
-  // Check for customer email
-  const customer = await Customer.findOne({
-    $or: [{ email: email }, { mobile: mobile }],
-  });
-
-  if (!customer) {
-    res.status(400);
-    throw new Error("No customer found with this email");
-  }
-
-  // Check if password matches
-
-  if (customer && (await compare(password, customer.password))) {
-    res.status(200).json({
-      _id: customer.id,
-      name: customer.name,
-      email: customer.email,
-      mobile: customer.mobile,
-      isVerified: customer.isVerified,
-      image: customer.image,
-      gender: customer.gender,
-      token: generateToken(customer._id),
+    const customer = await Customer.findOne({
+      $or: [{ email: email }, { mobile: mobile }],
     });
-  } else {
-    res.status(400);
-    throw new Error("Invalid Credentials");
-  }
+    console.log("Customer:", customer);
 
+    if (!customer) {
+      console.log("No customer found with this email or mobile");
+      res.status(400).json({ message: "No customer found with this email or mobile" });
+      return;
+    }
+
+    // Extract components from the stored password
+    const [hashedPassword, salt, iterations] = customer.password.split(':');
+
+    // Assuming SHA-256 as the hash function
+    const inputHash = createHmac('sha256', salt).update(password).digest('hex');
+
+    // Verify the password
+    const isPasswordValid = inputHash === hashedPassword;
+
+    if (isPasswordValid) {
+      res.status(200).json({
+        _id: customer.id,
+        name: customer.name,
+        email: customer.email,
+        mobile: customer.mobile,
+        isVerified: customer.isVerified,
+        image: customer.image,
+        gender: customer.gender,
+        token: generateToken(customer._id),
+      });
+    } else {
+      console.log("Invalid Credentials");
+      res.status(400).json({ message: "Invalid Credentials" });
+    }
+  } catch (error) {
+    console.error("Error:", error.stack);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
 });
+
+
+
+
+
 
 // Change Customer Password
 const changeCustomerPassword = asyncHandler(async (req, res) => {

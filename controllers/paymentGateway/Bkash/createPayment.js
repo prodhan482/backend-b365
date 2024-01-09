@@ -49,19 +49,19 @@ const createPayment = asyncHandler(async (req, res) => {
 
     const bkashTransaction = await BkashTransaction.create({
       statusCode: paymentResponse.data.statusCode,
-      statusMessage: paymentResponse.data.statusMessage,
+      // statusMessage: paymentResponse.data.statusMessage,
       paymentID: paymentResponse.data.paymentID,
       bkashURL: paymentResponse.data.bkashURL,
-      callbackURL: paymentResponse.data.callbackURL,
+      // callbackURL: paymentResponse.data.callbackURL,
       successCallbackURL: paymentResponse.data.successCallbackURL,
       failureCallbackURL: paymentResponse.data.failureCallbackURL,
       cancelledCallbackURL: paymentResponse.data.cancelledCallbackURL,
       amount: paymentResponse.data.amount,
-      intent: paymentResponse.data.intent,
-      currency: paymentResponse.data.currency,
+      // intent: paymentResponse.data.intent,
+      // currency: paymentResponse.data.currency,
       paymentCreateTime: paymentResponse.data.paymentCreateTime,
       transactionStatus: paymentResponse.data.transactionStatus,
-      merchantInvoiceNumber: paymentResponse.data.merchantInvoiceNumber,
+      // merchantInvoiceNumber: paymentResponse.data.merchantInvoiceNumber,
     });
 
     res.status(200).json({
@@ -70,17 +70,31 @@ const createPayment = asyncHandler(async (req, res) => {
       transaction: bkashTransaction,
     });
   } catch (error) {
-    res
-      .status(500)
-      .json({ error: "Payment creation failed. Please try again." });
+    res.status(401).json({ error: error.message });
   }
 });
 
 const executePayment = asyncHandler(async (req, res) => {
-  const { status } = req.query;
   const { paymentID } = req.params;
+ 
+
+ 
 
   try {
+    const existingTransaction = await BkashTransaction.findOne({ paymentID });
+
+
+    if (existingTransaction.status === 'cancel' || existingTransaction.status === 'failure') {
+      return res.redirect(process.env.BASE_URL + `/error?message=${existingTransaction.status}`)
+    }
+
+    if (!existingTransaction) {
+      return res.status(404).json({
+        success: false,
+        message: "Bkash transaction not found for the given paymentID.",
+      });
+    }
+
     const grantTokenResponse = await axios.post(
       process.env.BKASH_GRANT_TOKEN_URL,
       {
@@ -98,10 +112,8 @@ const executePayment = asyncHandler(async (req, res) => {
 
     const grantToken = grantTokenResponse.data.id_token;
 
-    if (status === "cancel" || status === "failure") {
-      return res.redirect(process.env.BASE_URL + `error?message=${status}`);
-    }
-    if (status === "success") {
+
+    if (existingTransaction.status === 'success') {
       const executeResponse = await axios.post(
         process.env.BKASH_EXECUTE_PAYMENT_URL,
         {
@@ -114,58 +126,46 @@ const executePayment = asyncHandler(async (req, res) => {
           },
         }
       );
-      if (executeResponse && executeResponse.statusCode === "0000") {
-        //const userId = globals.get('userId')
-        // await paymentModel.create({
-        //   userId: Math.random() * 10 + 1,
-        //   paymentID,
-        //   trxID: data.trxID,
-        //   date: data.paymentExecuteTime,
-        //   amount: parseInt(data.amount),
-        // });
 
-        return res.redirect(process.env.BASE_URL + `success`);
-      } else {
-        return res.redirect(
-          process.env.BASE_URL + `error?message=${executeResponse.statusMessage}`
+      if (executeResponse && executeResponse.statusCode === '0000') {
+        const bkashTransactionData = {
+          paymentID: executeResponse.data.paymentID,
+          payerReference: executeResponse.data.payerReference,
+          customerMsisdn: executeResponse.data.customerMsisdn,
+          trxID: executeResponse.data.trxID,
+          // trxID: executeResponse.data.trxID,
+          amount: executeResponse.data.amount,
+          transactionStatus: executeResponse.data.transactionStatus,
+          paymentExecuteTime: executeResponse.data.paymentExecuteTime,
+          currency: executeResponse.data.currency,
+          intent: executeResponse.data.intent,
+          merchantInvoiceNumber: executeResponse.data.merchantInvoiceNumber,
+        };
+        console.log("🚀 ~ file: createPayment.js:135 ~ executePayment ~ bkashTransactionData:", bkashTransactionData)
+
+        // Update the existing transaction with the new data
+        const updatedTransaction = await BkashTransaction.findOneAndUpdate(
+          { paymentID: existingTransaction.paymentID },
+          bkashTransactionData,
+          { new: true }
         );
+        return res.redirect(process.env.BASE_URL + `/success`)
+      } else {
+        return res.redirect(process.env.BASE_URL + `/error?message=${executeResponse.statusMessage}`)
       }
     }
-    // if (paymentId == BkashTransaction.paymentID) {
-    //   console.log(
-    //     "🚀 ~ file: createPayment.js:96 ~ executePayment ~ paymentId:",
-    //     paymentId
-    //   );
 
-    //   // Step 3: Update the database
-    //   const executionTransaction = await BkashTransaction.findOneAndUpdate(
-    //     { paymentID: executeResponse.data.paymentID },
-    //     {
-    //       $set: {
-    //         statusCode: executeResponse.data.statusCode,
-    //         statusMessage: executeResponse.data.statusMessage,
-    //         payerReference: executeResponse.data.payerReference,
-    //         customerMsisdn: executeResponse.data.customerMsisdn,
-    //         trxID: executeResponse.data.trxID,
-    //         amount: executeResponse.data.amount,
-    //         transactionStatus: executeResponse.data.transactionStatus,
-    //         paymentExecuteTime: executeResponse.data.paymentExecuteTime,
-    //         currency: executeResponse.data.currency,
-    //         intent: executeResponse.data.intent,
-    //         merchantInvoiceNumber: executeResponse.data.merchantInvoiceNumber,
-    //       },
-    //     },
-    //     { new: true, upsert: true }
-    //   );
+    const finalResponse = {
+      success: true,
+      message: "Bkash payment successfully updated",
+      transaction: {
+        ...existingTransaction.toObject(),
+        ...bkashTransactionData,
+      },
+    };
+    console.log("🚀 ~ file: createPayment.js:163 ~ executePayment ~ finalResponse:", finalResponse)
 
-      // console.log("🚀 ~ file: createPayment.js:116 ~ executePayment ~ executionTransaction:", executionTransaction)
-
-      res.status(200).json({
-        success: true,
-        message: "Bkash payment executed successfully",
-        transaction: executionTransaction,
-      });
-    
+    res.status(200).json(finalResponse);
   } catch (error) {
     console.error(error);
     res
